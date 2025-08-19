@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard de Asistencia de Empleados</title>
+    <!-- CSS local -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+    <!-- FullCalendar desde CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
+</head>
+<body>
+    <div class="dashboard-container">
+        <header class="dashboard-header">
+            <h1>Dashboard de Asistencia</h1>
+            <div class="employee-selector">
+                <label for="employee-select">Seleccionar Empleado:</label>
+                <select id="employee-select"></select>
+            </div>
+        </header>
+        <main class="dashboard-main">
+            <div id="calendar-container">
+                <div id="calendar"></div>
+            </div>
+            <div id="details-panel">
+                <h2>Detalles del Día</h2>
+                <div id="details-content">
+                    <p>Seleccione un día en el calendario para ver los detalles.</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Tu JS local -->
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>

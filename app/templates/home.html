@@ -1,0 +1,23 @@
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registro de Asistencia</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/home.css') }}?v=1.0">
+</head>
+<body>
+    <div class="container">
+        <h1>Seleccione el método de registro</h1>
+        <div class="button-container">
+            <button id="qr-btn" class="choice-btn">
+                <img src="{{ url_for('static', filename='img/qr-code-icon.png') }}" alt="Icono de Código QR">
+                <span>Código QR</span>
+            </button>
+            <button id="doc-btn" class="choice-btn">
+                <img src="{{ url_for('static', filename='img/id-card-icon.png') }}" alt="Icono de Documento">
+                <span>Documento de Identidad</span>
+            </button>
+        </div>
+    </div>
+</body>
+</html>

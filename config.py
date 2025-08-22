@@ -1,0 +1,4 @@
+class Config:
+    SECRET_KEY = 'adso2931558'
+    SQLALCHEMY_DATABASE_URI = 'mysql+pymysql://root:@127.0.0.1:3306/ACAE'
+    SQLALCHEMY_TRACK_MODIFICATIONS = False

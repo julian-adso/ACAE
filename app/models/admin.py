@@ -11,6 +11,7 @@ class Admin(db.Model):
     documentAdmin = db.Column(db.String(100), nullable=False)
     phoneAdmin = db.Column(db.String(15), nullable=False)
     emailAdmin = db.Column(db.String(100), nullable=False)
+    horario = db.Column(db.Enum('Mañana', 'Tarde', 'Noche'), nullable=False)
     
     login = db.relationship('Login', back_populates='admins')
    

@@ -58,11 +58,20 @@ document.getElementById('doc-btn').addEventListener('click', function() {
                 });
 
                 const data = await res.json();
-                if (res.ok) {
-                    // Mensaje según lo que devolvió el backend (Ingreso o Salida)
-                    alert(`✅ ${data.message}`);
+
+                if (!res.ok && data.message && data.message.includes("motivo")) {
+                    const motivo = prompt(data.message);
+                    if (motivo) {
+                        const res2 = await fetch('/registrar_ingreso', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ documento, motivo })
+                        });
+                        const data2 = await res2.json();
+                        alert(data2.message);
+                    }
                 } else {
-                    alert(`❌ ${data.message}`);
+                    alert(data.message);
                 }
             } catch (error) {
                 console.error("Error en la petición:", error);

@@ -1,9 +1,9 @@
 Python -m venv venv
 venv\Scripts\activate
 # requirements.txt
-pip install Flask==2.0.1
-pip install Flask-SQLAlchemy==2.5.1
-pip install SQLAlchemy==1.4.31
+pip install Flask  ==2.0.1
+pip install Flask-SQLAlchemy  ==2.5.1
+pip install SQLAlchemy  ==1.4.31
 #mysqlclient==2.0.3
-pip install PyMySQL==1.0.2
+pip install PyMySQL  ==1.0.2
 Werkzeug==2.2.2

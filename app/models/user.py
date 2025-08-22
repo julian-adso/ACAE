@@ -11,6 +11,7 @@ class User(db.Model):
     documentUser = db.Column(db.String(100), nullable=False)
     phoneUser = db.Column(db.String(15), nullable=False)
     emailUser = db.Column(db.String(100), nullable=False)
+    horario = db.Column(db.Enum('Mañana', 'Tarde', 'Noche'), nullable=False)
     
     login = db.relationship('Login', back_populates ='users')
     salidas = db.relationship('Salida', backref = 'user')

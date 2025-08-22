@@ -70,52 +70,89 @@ def index():
 def dashboard():
     return render_template('dashboard.html')
 
+# Registrar el horario y el ingreso
+def determinar_horario_actual():
+    ahora = datetime.now().time()
+
+    if ahora >= datetime.strptime("06:00", "%H:%M").time() and ahora < datetime.strptime("12:00", "%H:%M").time():
+        return "Mañana"
+    elif ahora >= datetime.strptime("12:00", "%H:%M").time() and ahora < datetime.strptime("18:00", "%H:%M").time():
+        return "Tarde"
+    else:
+        return "Noche"
+
 
 @user_bp.route('/registrar_ingreso', methods=['POST'])
 def registrar_ingreso():
     data = request.get_json()
     documento = data.get('documento')
+    motivo = data.get('motivo')  # puede venir vacío o no
 
     if not documento:
         return jsonify({'success': False, 'message': 'Documento requerido'}), 400
 
-    # Buscar usuario en la tabla User
     usuario = User.query.filter_by(documentUser=documento).first()
     if not usuario:
         return jsonify({'success': False, 'message': 'Usuario no encontrado'}), 404
 
-    # Buscar si ya tiene un ingreso registrado HOY
-    ingreso = Ingreso.query.filter_by(user_id=usuario.idUser, fecha=date.today()).first()
+    # Horario actual y horario esperado
+    horario_actual = determinar_horario_actual()
+    horario_trabajador = usuario.horario  # ⚠️ Asegúrate de que User tenga este campo
+
+    # Si ya tiene ingreso registrado hoy
+    ingreso = Ingreso.query.filter_by(user_id=usuario.idUser, fecha=date.today()).order_by(Ingreso.idIngreso.desc()).first()
 
     if ingreso:
-        # Verificar si ya tiene salida asociada
         salida = Salida.query.filter_by(ingreso_id=ingreso.idIngreso).first()
         if salida:
+            # Permitir nuevo ingreso solo con motivo
+            if not motivo:
+                return jsonify({
+                    'success': False,
+                    'message': 'Debe ingresar un motivo para volver a entrar.'
+                }), 400
+
+            nuevo_ingreso = Ingreso(
+                user_id=usuario.idUser,
+                fecha=date.today(),
+                hora=datetime.now().time(),
+                horario=horario_actual,
+                estado='Presente',
+                motivo=motivo
+            )
+            db.session.add(nuevo_ingreso)
+            db.session.commit()
+
+            return jsonify({'success': True, 'message': f'Nuevo ingreso registrado con motivo: {motivo}'})
+
+        else:
+            # Registrar salida
+            nueva_salida = Salida(
+                user_id=usuario.idUser,
+                ingreso_id=ingreso.idIngreso,
+                fecha=date.today(),
+                hora_salida=datetime.now().time(),
+                horario=ingreso.horario
+            )
+            db.session.add(nueva_salida)
+            db.session.commit()
+            return jsonify({'success': True, 'message': 'Salida registrada'})
+
+    else:
+        # Primer ingreso del día
+        if horario_actual != horario_trabajador and not motivo:
             return jsonify({
                 'success': False,
-                'message': 'Ya se registró la salida para este usuario hoy'
+                'message': f'El horario actual es {horario_actual}, pero su horario asignado es {horario_trabajador}. Ingrese un motivo para continuar.'
             }), 400
 
-        # Registrar la salida enlazada al ingreso existente
-        nueva_salida = Salida(
-            user_id=usuario.idUser,
-            ingreso_id=ingreso.idIngreso,
-            fecha=date.today(),
-            hora_salida=datetime.now().time(),
-            horario=ingreso.horario  # mantener el horario del ingreso
-        )
-        db.session.add(nueva_salida)
-        db.session.commit()
-
-        return jsonify({'success': True, 'message': 'Salida registrada'})
-    else:
-        # Registrar nuevo ingreso si no existe
         nuevo_ingreso = Ingreso(
             user_id=usuario.idUser,
             fecha=date.today(),
             hora=datetime.now().time(),
-            horario='Mañana',  # opcional: ajustar dinámicamente
-            estado='Presente'
+            horario=horario_actual,
+            estado='Presente',
+            motivo=motivo
         )
         db.session.add(nuevo_ingreso)
         db.session.commit()

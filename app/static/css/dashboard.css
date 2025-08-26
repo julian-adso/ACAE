@@ -18,6 +18,11 @@ body {
     line-height: 1.6;
 }
 
+.on-time { background-color: green !important; color: white !important; }
+.late { background-color: orange !important; color: white !important; }
+.absent { background-color: red !important; color: white !important; }
+.exit { background-color: blue !important; color: white !important; }
+
 .dashboard-container {
     display: flex;
     flex-direction: column;

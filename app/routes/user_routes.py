@@ -1,7 +1,7 @@
 
 from flask import Blueprint, render_template, request, jsonify,redirect, url_for, flash, session, jsonify
 from app.models.decorators import login_required
-from ..models.ingreso import Ingreso
+from app.models.ingreso import Ingreso
 from ..models.salida import Salida
 from .. import db
 from app.models.user import User
@@ -9,6 +9,9 @@ from app.models.admin import Admin
 from app.models.login import Login
 from datetime import date, datetime
 import hashlib
+from app import db
+from flask import session, render_template
+
 
 user_bp = Blueprint('user', __name__)
 
@@ -33,10 +36,10 @@ def login():
             # Verificar si corresponde a un User
             user = User.query.filter_by(login_id=login.idLogin).first()
             if user:
-                session['user_id'] = user.idUser
-                session['username'] = login.usernameLogin
-                session['role'] = 'user'
-                return redirect(url_for('user.index'))  # Página de usuarios
+                    session['user_id'] = user.idUser
+                    session['username'] = user.usernameUser   # Guardamos el nombre real del usuario
+                    session['role'] = 'user'
+                    return redirect(url_for('user.index'))  # Página de usuarios (index.html)
 
             # Verificar si corresponde a un Admin
             admin = Admin.query.filter_by(login_id=login.idLogin).first()
@@ -52,23 +55,49 @@ def login():
 
     return render_template('login.html')
 
-# Logout route
 @user_bp.route('/logout')
 def logout():
-    session.clear()   # Elimina todos los datos de sesión
-    return redirect(url_for('user.login'))  # Redirige al login
+    session.clear()
+    return redirect(url_for('user.login'))
 
-# Index route
 @user_bp.route('/index')
-@login_required(role='user')
 def index():
-    return render_template('index.html')
+    if 'user_id' not in session:
+        return redirect(url_for('user.login'))
 
-# Dashboard route
+    usuario = User.query.get(session['user_id'])
+
+    hoy = datetime.now()
+
+    # Contar asistencias y ausencias del mes actual
+    # CORRECCIÓN: Cambiar 'usuario_id' por 'user_id'
+    asistencias = Ingreso.query.filter_by(user_id=usuario.idUser, estado='Asistencia')\
+                               .filter(db.extract('month', Ingreso.fecha) == hoy.month).count()
+
+    # CORRECCIÓN: Cambiar 'usuario_id' por 'user_id'
+    ausencias = Ingreso.query.filter_by(user_id=usuario.idUser, estado='Ausencia')\
+                             .filter(db.extract('month', Ingreso.fecha) == hoy.month).count()
+
+    # Historial últimos 10 ingresos
+    # CORRECCIÓN: Cambiar 'usuario_id' por 'user_id'
+    historial = Ingreso.query.filter_by(user_id=usuario.idUser)\
+                             .order_by(Ingreso.fecha.desc(), Ingreso.hora.desc())\
+                             .limit(10).all()
+
+    return render_template(
+        'index.html',
+        username=usuario.usernameUser,
+        asistencias=asistencias,
+        ausencias=ausencias,
+        historial=historial
+    )
 @user_bp.route('/dashboard')
-@login_required(role='admin')
 def dashboard():
-    return render_template('dashboard.html')
+    if 'admin_id' not in session:
+        return redirect(url_for('user.login'))
+
+    # Aquí puedes traer estadísticas generales, lista de usuarios, etc.
+    return render_template('dashboard.html', username=session['username'])
 
 # Registrar el horario y el ingreso
 def determinar_horario_actual():

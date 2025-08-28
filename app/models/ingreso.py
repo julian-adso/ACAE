@@ -11,5 +11,5 @@ class Ingreso(db.Model):
     estado = db.Column(db.Enum('Presente', 'Retardo', 'Ausente'), nullable=False) # Estado del ingreso
     motivo = db.Column(db.String(255)) # Motivo del ingreso, si aplica
 
-    user = db.relationship('Salida', backref='ingresos')
+    user = db.relationship('User', backref='ingresos') 
     

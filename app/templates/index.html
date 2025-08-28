@@ -15,25 +15,29 @@
     <header>
         <h1>Dashboard de Asistencia</h1>
         <div class="user-info">
+            <!-- Botón de cerrar sesión -->
             <a href="{{ url_for('user.logout') }}" class="btn btn-danger">Cerrar sesión</a>
-            <p>Bienvenido, <strong>Juan Pérez</strong></p>
+            <!-- Nombre dinámico del usuario -->
+            <p>Bienvenido, <strong>{{ username }}</strong></p>
         </div>
     </header>
 
     <main class="dashboard-container">
+        <!-- Resumen de asistencias y ausencias -->
         <section class="summary-grid">
             <div class="card">
                 <h2>Días Asistidos</h2>
-                <p id="asistencias-count" class="count">0</p>
+                <p id="asistencias-count" class="count">{{ asistencias }}</p>
                 <span class="card-footer">Mes Actual</span>
             </div>
             <div class="card">
                 <h2>Fallas (Ausencias)</h2>
-                <p id="fallas-count" class="count">0</p>
+                <p id="fallas-count" class="count">{{ ausencias }}</p>
                 <span class="card-footer">Mes Actual</span>
             </div>
         </section>
 
+        <!-- Tabla con historial dinámico -->
         <section class="card history-card">
             <h2>Historial de Ingresos Recientes</h2>
             <table id="history-table">
@@ -45,11 +49,26 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <!-- Las filas se insertarán aquí desde JavaScript -->
+                    {% if historial %}
+                        {% for ingreso in historial %}
+                            <tr>
+                                <td>{{ ingreso.fecha.strftime('%Y-%m-%d') }}</td>
+                                <td>{{ ingreso.hora.strftime('%H:%M:%S') }}</td>
+                                <td>{{ ingreso.estado }}</td>
+                            </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="3" style="text-align:center;">No hay registros disponibles</td>
+                        </tr>
+                    {% endif %}
                 </tbody>
             </table>
         </section>
     </main>
+
+    <!-- Script JS -->
     <script src="{{ url_for('static', filename='js/index.js') }}"></script>
 </body>
+
 </html>

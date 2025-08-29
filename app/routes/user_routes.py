@@ -9,9 +9,13 @@ from app.models.admin import Admin
 from app.models.login import Login
 from datetime import date, datetime
 import hashlib
+<<<<<<< HEAD
 from app import db
 from flask import session, render_template
 
+=======
+from collections import defaultdict
+>>>>>>> b4a095288f0fdb0ed959856b319d410c1b33d3ae
 
 user_bp = Blueprint('user', __name__)
 
@@ -187,3 +191,58 @@ def registrar_ingreso():
         db.session.commit()
 
         return jsonify({'success': True, 'message': 'Ingreso registrado'})
+
+@user_bp.route('/api/empleados')
+def obtener_empleados():
+    usuarios = User.query.all()
+    empleados = [
+        {
+            'id': u.idUser,
+            'name': u.usernameUser   # 👈 asegúrate de que tu modelo User tenga este campo
+        }
+        for u in usuarios
+    ]
+    return jsonify(empleados)
+
+@user_bp.route('/api/empleado/<int:user_id>/asistencia')
+def obtener_asistencia(user_id):
+    usuario = User.query.get(user_id)
+    if not usuario:
+        return jsonify({'success': False, 'message': 'Usuario no encontrado'}), 404
+
+    ingresos = Ingreso.query.filter_by(user_id=user_id).all()
+    eventos = []
+
+    for ingreso in ingresos:
+        # Evento de ingreso
+        eventos.append({
+            'title': f'Ingreso: {ingreso.hora.strftime("%H:%M")}',
+            'start': f"{ingreso.fecha.strftime('%Y-%m-%d')}T{ingreso.hora.strftime('%H:%M:%S')}",
+            'className': 'ingreso',
+            'tipo': 'ingreso',
+            'extendedProps': {
+                'fecha': ingreso.fecha.strftime("%Y-%m-%d"),
+                'hora': ingreso.hora.strftime("%H:%M"),
+                'estado': ingreso.estado,
+                'motivo': ingreso.motivo,
+                'horario': ingreso.horario
+            }
+        })
+
+        # Evento de salida (si existe)
+        if ingreso.salida:
+            salida = ingreso.salida
+            eventos.append({
+                'title': f'Salida: {salida.hora_salida.strftime("%H:%M")}',
+                'start': f"{salida.fecha.strftime('%Y-%m-%d')}T{salida.hora_salida.strftime('%H:%M:%S')}",
+                'className': 'salida',
+                'tipo': 'salida',
+                'extendedProps': {
+                    'fecha': salida.fecha.strftime("%Y-%m-%d"),
+                    'hora': salida.hora_salida.strftime("%H:%M"),
+                    'horario': salida.horario
+                }
+            })
+
+    return jsonify({'success': True, 'eventos': eventos})
+

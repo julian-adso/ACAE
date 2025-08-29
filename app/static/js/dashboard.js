@@ -1,46 +1,15 @@
-document.addEventListener('DOMContentLoaded', function() {
-    // --- DATOS DE EJEMPLO ---
-    const mockData = {
-        employees: [
-            {
-                id: 1,
-                name: "Ana García",
-                schedule: { days: [1, 2, 3, 4, 5], start: "09:00", end: "17:00" }, // Lunes a Viernes
-                attendance: [
-                    { date: "2024-07-01", checkIn: "08:58" },
-                    { date: "2024-07-02", checkIn: "09:05" }, // Tarde
-                    { date: "2024-07-03", checkIn: "08:50" },
-                    // 4 de julio ausente
-                    { date: "2024-07-05", checkIn: "09:00" },
-                    { date: "2024-07-08", checkIn: "09:15" }, // Tarde
-                    { date: "2024-07-09", checkIn: "08:55" },
-                    { date: "2024-07-10", checkIn: "08:59" },
-                ]
-            },
-            {
-                id: 2,
-                name: "Carlos Rodriguez",
-                schedule: { days: [1, 2, 3, 4, 5], start: "08:30", end: "16:30" }, // Lunes a Viernes
-                attendance: [
-                    { date: "2024-07-01", checkIn: "08:30" },
-                    { date: "2024-07-02", checkIn: "08:25" },
-                    { date: "2024-07-03", checkIn: "08:40" }, // Tarde
-                    { date: "2024-07-04", checkIn: "08:28" },
-                    { date: "2024-07-05", checkIn: "08:31" }, // Tarde
-                    // 8-10 Julio vacaciones
-                ]
-            }
-        ]
-    };
-
-    // --- ELEMENTOS DEL DOM ---
+document.addEventListener('DOMContentLoaded', async function () {
     const employeeSelect = document.getElementById('employee-select');
     const calendarEl = document.getElementById('calendar');
     const detailsContent = document.getElementById('details-content');
 
-    // --- INICIALIZACIÓN DEL CALENDARIO ---
+    // =============================
+    // 📅 Inicializar FullCalendar
+    // =============================
     const calendar = new FullCalendar.Calendar(calendarEl, {
-        initialView: 'dayGridMonth',
+        initialView: 'timeGridWeek', // vista semanal con horas
+        slotMinTime: "06:00:00",     // inicio horario visible
+        slotMaxTime: "20:00:00",     // fin horario visible
         locale: 'es',
         headerToolbar: {
             left: 'prev,next today',
@@ -48,110 +17,190 @@ document.addEventListener('DOMContentLoaded', function() {
             right: 'dayGridMonth,timeGridWeek'
         },
         height: 'auto',
-        events: [],
-        eventClick: function(info) {
+        events: [], // se llenará dinámicamente
+        eventClick: function (info) {
             updateDetailsPanel(info.event.extendedProps);
         }
     });
     calendar.render();
 
-    // --- FUNCIONES ---
+    // =============================
+    // 👥 Cargar lista de empleados
+    // =============================
+    async function cargarEmpleados() {
+        try {
+            const res = await fetch('/api/empleados');
+            const empleados = await res.json();
 
-    function populateEmployeeSelector() {
-        mockData.employees.forEach(emp => {
-            const option = document.createElement('option');
-            option.value = emp.id;
-            option.textContent = emp.name;
-            employeeSelect.appendChild(option);
-        });
-    }
+            // limpiar select antes de llenarlo
+            employeeSelect.innerHTML = '';
 
-    function getStatus(checkIn, scheduleStart) {
-        if (!checkIn) return { text: 'Ausente', className: 'absent' };
-        return checkIn > scheduleStart ? 
-            { text: 'Tarde', className: 'late' } : 
-            { text: 'A tiempo', className: 'on-time' };
-    }
+            empleados.forEach(emp => {
+                const option = document.createElement('option');
+                option.value = emp.id;
+                option.textContent = emp.name;
+                employeeSelect.appendChild(option);
+            });
 
-    function updateCalendarForEmployee(employeeId) {
-        const employee = mockData.employees.find(e => e.id == employeeId);
-        if (!employee) return;
-
-        calendar.removeAllEvents();
-        const events = [];
-        const today = new Date();
-        const currentMonth = today.getMonth();
-        const currentYear = today.getFullYear();
-
-        // Generar eventos para el mes actual
-        const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
-
-        for (let day = 1; day <= daysInMonth; day++) {
-            const date = new Date(currentYear, currentMonth, day);
-            const dateString = date.toISOString().split('T')[0];
-            const dayOfWeek = date.getDay() === 0 ? 6 : date.getDay() -1; // Ajuste para que Lunes sea 0
-
-            // Es un día laboral según el horario?
-            if (employee.schedule.days.includes(date.getDay())) {
-                const attendanceRecord = employee.attendance.find(a => a.date === dateString);
-                const status = getStatus(attendanceRecord?.checkIn, employee.schedule.start);
-
-                events.push({
-                    title: attendanceRecord ? `Ingreso: ${attendanceRecord.checkIn}` : 'Ausente',
-                    start: dateString,
-                    className: status.className,
-                    allDay: true,
-                    extendedProps: {
-                        date: dateString,
-                        schedule: employee.schedule,
-                        attendance: attendanceRecord,
-                        status: status.text
-                    }
-                });
+            // seleccionar primer empleado por defecto
+            if (empleados.length > 0) {
+                employeeSelect.value = empleados[0].id;
+                actualizarCalendario(empleados[0].id);
             }
+        } catch (error) {
+            console.error("Error cargando empleados:", error);
         }
-
-        calendar.addEventSource(events);
-        resetDetailsPanel();
     }
 
-    function updateDetailsPanel(props) {
-        if (!props || !props.date) {
+    // =============================
+    // ⏰ Cargar asistencias al calendario
+    // =============================
+    async function actualizarCalendario(userId) {
+    try {
+        const res = await fetch(`/api/empleado/${userId}/asistencia`);
+        const data = await res.json();
+
+        if (data.success) {
+            // Definir límites de hora por jornada
+            const horarios = {
+                manana: "07:10:00",
+                tarde: "13:10:00",
+                noche: "18:10:00"
+            };
+
+            const jornada = data.jornada?.toLowerCase() || "manana";
+            const limite = horarios[jornada];
+
+            // 1️⃣ Agrupar eventos por fecha
+            const eventosPorDia = {};
+            data.eventos.forEach(ev => {
+                const fecha = ev.extendedProps.fecha;
+                if (!eventosPorDia[fecha]) {
+                    eventosPorDia[fecha] = [];
+                }
+                eventosPorDia[fecha].push(ev);
+            });
+
+            // 2️⃣ Evaluaciones solo con ingresos
+            const evaluaciones = Object.entries(eventosPorDia).map(([fecha, eventos]) => {
+                const ingresos = eventos.filter(e => e.tipo === "ingreso" && e.extendedProps.hora);
+
+                if (ingresos.length === 0) {
+                    return {
+                        title: "❌ Falta",
+                        start: fecha,
+                        allDay: true,
+                        className: "absent",
+                        extendedProps: { fecha, estado: "Falta" }
+                    };
+                }
+
+                ingresos.sort((a, b) => a.extendedProps.hora.localeCompare(b.extendedProps.hora));
+                const primerIngreso = ingresos[0];
+
+                if (primerIngreso.extendedProps.hora <= limite) {
+                    return {
+                        title: "✅ Asistencia",
+                        start: fecha,
+                        allDay: true,
+                        className: "on-time",
+                        extendedProps: { fecha, hora: primerIngreso.extendedProps.hora, estado: "Asistencia" }
+                    };
+                } else {
+                    return {
+                        title: "⚠️ Retardo",
+                        start: fecha,
+                        allDay: true,
+                        className: "late",
+                        extendedProps: { fecha, hora: primerIngreso.extendedProps.hora, estado: "Retardo" }
+                    };
+                }
+            });
+
+            // 3️⃣ Normalizar ingresos y salidas para el calendario
+            const ingresosYsalidas = data.eventos
+                .filter(ev => ev.extendedProps.hora) // 🔹 Solo eventos con hora válida
+                .map(ev => {
+                    const fechaHora = `${ev.extendedProps.fecha}T${ev.extendedProps.hora}`;
+
+                    // Log de debug para ver qué llega
+                    console.log("Evento normalizado:", ev.tipo, fechaHora);
+
+                    return {
+                        title: ev.tipo === "ingreso"
+                            ? `Ingreso: ${ev.extendedProps.hora}`
+                            : `Salida: ${ev.extendedProps.hora}`,
+                        start: fechaHora,
+                        className: ev.tipo === "ingreso" ? "ingreso-event" : "salida-event",
+                        extendedProps: ev.extendedProps
+                    };
+            });
+
+            // 4️⃣ Combinar todo → ingresos + salidas + evaluaciones
+            const todosEventos = [...ingresosYsalidas, ...evaluaciones];
+
+            // 5️⃣ Refrescar calendario
+            calendar.removeAllEvents();
+            calendar.addEventSource(todosEventos);
+
             resetDetailsPanel();
-            return;
-        }
-
-        let content = `
-            <div class="detail-item"><strong>Fecha:</strong> ${new Date(props.date).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
-            <div class="detail-item"><strong>Horario:</strong> ${props.schedule.start} - ${props.schedule.end}</div>
-        `;
-
-        if (props.attendance) {
-            content += `
-                <div class="detail-item"><strong>Ingreso:</strong> ${props.attendance.checkIn}</div>
-                <div class="detail-item"><strong>Estado:</strong> <span class="status ${getStatus(props.attendance.checkIn, props.schedule.start).className}">${props.status}</span></div>
-            `;
+            updateSummary(evaluaciones);
         } else {
-             content += `<div class="detail-item"><strong>Estado:</strong> <span class="status absent">Ausente</span></div>`;
+            console.warn("Error:", data.message);
         }
+    } catch (error) {
+        console.error("Error cargando asistencias:", error);
+    }
+}
+
+    // =============================
+    // 📌 Panel de detalles (lado derecho)
+    // =============================
+    function updateDetailsPanel(props) {
+        let content = `<div><strong>Fecha:</strong> ${props.fecha}</div>`;
+        if (props.hora) content += `<div><strong>Ingreso:</strong> ${props.hora}</div>`;
+        if (props.hora_salida) content += `<div><strong>Salida:</strong> ${props.hora_salida}</div>`;
+        if (props.estado) content += `<div><strong>Estado:</strong> ${props.estado}</div>`;
+        if (props.motivo) content += `<div><strong>Motivo:</strong> ${props.motivo}</div>`;
 
         detailsContent.innerHTML = content;
     }
 
     function resetDetailsPanel() {
-        detailsContent.innerHTML = '<p>Seleccione un día en el calendario para ver los detalles.</p>';
+        detailsContent.innerHTML = '<p>Seleccione un evento en el calendario para ver los detalles.</p>';
+        document.getElementById('summary-content').innerHTML = '<p>Resumen no disponible.</p>';
     }
 
-    // --- EVENT LISTENERS ---
+    function updateSummary(eventos) {
+        let asistencias = 0;
+        let retardos = 0;
+        let faltas = 0;
+
+        eventos.forEach(ev => {
+            if (ev.className === 'on-time') asistencias++;
+            else if (ev.className === 'late') retardos++;
+            else if (ev.className === 'absent') faltas++;
+        });
+
+        const resumenHTML = `
+            <h4>📊 Resumen de asistencia</h4>
+            <div><strong>✅ Asistencias:</strong> ${asistencias}</div>
+            <div><strong>⚠️ Retardos:</strong> ${retardos}</div>
+            <div><strong>❌ Faltas:</strong> ${faltas}</div>
+        `;
+
+        document.getElementById('summary-content').innerHTML = resumenHTML;
+    }
+
+    // =============================
+    // 🎯 Cambio de empleado en select
+    // =============================
     employeeSelect.addEventListener('change', (e) => {
-        updateCalendarForEmployee(e.target.value);
+        actualizarCalendario(e.target.value);
     });
 
-    // --- EJECUCIÓN INICIAL ---
-    populateEmployeeSelector();
-    if (mockData.employees.length > 0) {
-        employeeSelect.value = mockData.employees[0].id;
-        updateCalendarForEmployee(mockData.employees[0].id);
-    }
+    // =============================
+    // 🚀 Inicializar al cargar
+    // =============================
+    cargarEmpleados();
 });
-

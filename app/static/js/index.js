@@ -2,19 +2,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- DATOS DE EJEMPLO ---
     // En una aplicación real, estos datos vendrían de una base de datos.
-    const attendanceData = [
-        { date: '2023-11-01', entryTime: '08:55' },
-        { date: '2023-11-02', entryTime: '09:07' },
-        { date: '2023-11-03', entryTime: '08:59' },
-        { date: '2023-11-04', entryTime: null }, // Ausencia
-        { date: '2023-11-05', entryTime: '09:01' },
-        { date: '2023-11-06', entryTime: '09:15' },
-        { date: '2023-11-07', entryTime: '08:50' },
-        { date: '2023-11-08', entryTime: null }, // Ausencia
-        { date: '2023-11-09', entryTime: '09:00' },
-        { date: '2023-11-10', entryTime: '09:30' },
-        { date: '2023-11-11', entryTime: '08:58' },
-    ];
+
 
     const HORA_ENTRADA_OFICIAL = '09:00';
 

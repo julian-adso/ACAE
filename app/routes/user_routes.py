@@ -1,5 +1,4 @@
-
-from flask import Blueprint, render_template, request, jsonify,redirect, url_for, flash, session, jsonify
+from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash, session
 from app.models.decorators import login_required
 from app.models.ingreso import Ingreso
 from ..models.salida import Salida
@@ -9,19 +8,15 @@ from app.models.admin import Admin
 from app.models.login import Login
 from datetime import date, datetime
 import hashlib
-<<<<<<< HEAD
-from app import db
-from flask import session, render_template
-
-=======
 from collections import defaultdict
->>>>>>> b4a095288f0fdb0ed959856b319d410c1b33d3ae
+from app.models.super import Super 
 
 user_bp = Blueprint('user', __name__)
 
+# Página inicial (ahora inicio.html)
 @user_bp.route('/')
 def home():
-    return render_template('home.html')
+    return render_template('inicio.html')
 
 # Login route
 @user_bp.route('/login', methods=['GET', 'POST'])
@@ -40,10 +35,10 @@ def login():
             # Verificar si corresponde a un User
             user = User.query.filter_by(login_id=login.idLogin).first()
             if user:
-                    session['user_id'] = user.idUser
-                    session['username'] = user.usernameUser   # Guardamos el nombre real del usuario
-                    session['role'] = 'user'
-                    return redirect(url_for('user.index'))  # Página de usuarios (index.html)
+                session['user_id'] = user.idUser
+                session['username'] = user.usernameUser
+                session['role'] = 'user'
+                return redirect(url_for('user.index'))  # Página de usuarios (index.html)
 
             # Verificar si corresponde a un Admin
             admin = Admin.query.filter_by(login_id=login.idLogin).first()
@@ -53,16 +48,68 @@ def login():
                 session['role'] = 'admin'
                 return redirect(url_for('user.dashboard'))  # Página de admins
 
+            # Verificar si corresponde a un Super
+            super_user = Super.query.filter_by(login_id=login.idLogin).first()
+            if super_user:
+                session['super_id'] = super_user.idSuper
+                session['username'] = super_user.usernameSuper
+                session['role'] = 'super'
+                return redirect(url_for('user.home_super'))  # Página de super
+
         # Si no encontró nada
         flash('Usuario o contraseña incorrectos')
         return render_template('login.html')
 
     return render_template('login.html')
 
+# Registro de empleados (solo admin)
+@user_bp.route('/register', methods=['GET', 'POST'])
+@login_required(role='admin')
+def register():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        document = request.form.get('document')
+        phone = request.form.get('phone')
+        email = request.form.get('email')
+        horario = request.form.get('horario')
+
+        if not all([username, password, document, phone, email, horario]):
+            flash('Todos los campos son obligatorios')
+            return render_template('register.html')
+
+        if User.query.filter_by(usernameUser=username).first():
+            flash('El usuario ya existe')
+            return render_template('register.html')
+
+        # Crear Login
+        login = Login(usernameLogin=username)
+        login.set_password(password)
+        db.session.add(login)
+        db.session.flush()
+
+        # Crear User
+        user = User(
+            login_id=login.idLogin,
+            usernameUser=username,
+            passwordUser=login.passwordLogin,
+            documentUser=document,
+            phoneUser=phone,
+            emailUser=email,
+            horario=horario
+        )
+        db.session.add(user)
+        db.session.commit()
+
+        flash('Empleado registrado exitosamente')
+        return redirect(url_for('user.dashboard'))
+
+    return render_template('register.html')
+
 @user_bp.route('/logout')
 def logout():
     session.clear()
-    return redirect(url_for('user.login'))
+    return redirect(url_for('user.home'))
 
 @user_bp.route('/index')
 def index():
@@ -70,20 +117,14 @@ def index():
         return redirect(url_for('user.login'))
 
     usuario = User.query.get(session['user_id'])
-
     hoy = datetime.now()
 
-    # Contar asistencias y ausencias del mes actual
-    # CORRECCIÓN: Cambiar 'usuario_id' por 'user_id'
     asistencias = Ingreso.query.filter_by(user_id=usuario.idUser, estado='Asistencia')\
                                .filter(db.extract('month', Ingreso.fecha) == hoy.month).count()
 
-    # CORRECCIÓN: Cambiar 'usuario_id' por 'user_id'
     ausencias = Ingreso.query.filter_by(user_id=usuario.idUser, estado='Ausencia')\
                              .filter(db.extract('month', Ingreso.fecha) == hoy.month).count()
 
-    # Historial últimos 10 ingresos
-    # CORRECCIÓN: Cambiar 'usuario_id' por 'user_id'
     historial = Ingreso.query.filter_by(user_id=usuario.idUser)\
                              .order_by(Ingreso.fecha.desc(), Ingreso.hora.desc())\
                              .limit(10).all()
@@ -95,12 +136,12 @@ def index():
         ausencias=ausencias,
         historial=historial
     )
+
 @user_bp.route('/dashboard')
 def dashboard():
     if 'admin_id' not in session:
         return redirect(url_for('user.login'))
 
-    # Aquí puedes traer estadísticas generales, lista de usuarios, etc.
     return render_template('dashboard.html', username=session['username'])
 
 # Registrar el horario y el ingreso
@@ -113,6 +154,14 @@ def determinar_horario_actual():
         return "Tarde"
     else:
         return "Noche"
+    
+# route del super
+
+@user_bp.route('/home_super')
+def home_super():
+    if 'super_id' not in session:
+        return redirect(url_for('user.login'))
+    return render_template('home.html', username=session['username'])
 
 
 @user_bp.route('/registrar_ingreso', methods=['POST'])

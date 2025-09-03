@@ -1,4 +1,3 @@
-
 import hashlib
 from app import db
 
@@ -11,6 +10,7 @@ class Login(db.Model):
     
     admins = db.relationship('Admin', back_populates='login')
     users = db.relationship('User', back_populates='login')
+    super = db.relationship('Super', back_populates='login')
     
     def set_password(self, password: str):
         """"Genera el SHA1 y lo guarda en passwordLogin"""

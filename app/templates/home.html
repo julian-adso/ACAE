@@ -10,6 +10,12 @@
 </head>
 <body>
     <div class="container">
+        <nav class="dashboard-navbar">
+        <div class="navbar-content">
+            <span class="navbar-user">Bienvenido, <strong>{{ username }}</strong></span>
+            <a href="{{ url_for('user.logout') }}" class="logout-btn">Cerrar sesión</a>
+        </div>
+    </nav>
         <h1>Seleccione el método de registro</h1>
         <div class="button-container">
             <button id="qr-btn" class="choice-btn">

@@ -3,6 +3,7 @@ import hashlib
 from app import db
 
 class Admin(db.Model):
+    __tablename__= "admin"
     
     idAdmin = db.Column(db.Integer, autoincrement=True, primary_key=True)
     login_id = db.Column(db.Integer, db.ForeignKey('login.idLogin'), nullable=False)

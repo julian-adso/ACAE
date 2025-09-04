@@ -12,7 +12,6 @@ class Super(db.Model):
     horario = db.Column(db.Enum('Mañana', 'Tarde', 'Noche'), nullable=False)
 
     login = db.relationship('Login', back_populates='super')
-    salidas = db.relationship('Salida', backref='super')
 
     def set_password(self, password: str):
         self.passwordSuper = hashlib.sha1(password.encode('utf-8')).hexdigest()

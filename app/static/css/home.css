@@ -9,6 +9,34 @@ body {
     color: #333;
 }
 
+.dashboard-navbar {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    background: #fff;
+    padding: 1rem 2rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.navbar-content {
+    display: flex;
+    gap: 1.5rem;
+    align-items: center;
+}
+
+.logout-btn {
+    background: #e74c3c;
+    color: #fff;
+    padding: 0.5rem 1rem;
+    border-radius: 5px;
+    text-decoration: none;
+    font-weight: bold;
+}
+
+.logout-btn:hover {
+    background: #c0392b;
+}
+
 .container {
     max-width: 600px; /* Puedes ajustar el valor según prefieras */
     margin: 40px auto;

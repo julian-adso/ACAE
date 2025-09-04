@@ -119,10 +119,43 @@ def index():
     usuario = User.query.get(session['user_id'])
     hoy = datetime.now()
 
-    asistencias = Ingreso.query.filter_by(user_id=usuario.idUser, estado='Asistencia')\
+    # --- REGISTRAR AUSENCIAS AUTOMÁTICAMENTE ---
+    from calendar import monthrange
+    primer_dia = hoy.replace(day=1)
+    ultimo_dia = hoy.replace(day=monthrange(hoy.year, hoy.month)[1])
+
+    # Obtener todos los días del mes actual
+    dias_mes = [primer_dia.replace(day=d) for d in range(1, ultimo_dia.day + 1)]
+
+    # Obtener fechas con ingreso registrado
+    fechas_con_ingreso = set(
+        i.fecha for i in Ingreso.query.filter_by(user_id=usuario.idUser)
+        .filter(db.extract('month', Ingreso.fecha) == hoy.month)
+        .all()
+    )
+
+    # Registrar ausencia para los días sin ingreso y que sean <= hoy
+    for dia in dias_mes:
+         if dia.date() < hoy.date() and dia.date() not in fechas_con_ingreso:
+            if not Ingreso.query.filter_by(user_id=usuario.idUser, fecha=dia.date()).first():
+                ausencia = Ingreso(
+                    user_id=usuario.idUser,
+                    admin_id=None,
+                    rol='User',  # <--- Asigna el rol correspondiente
+                    fecha=dia.date(),
+                    hora=datetime.strptime("00:00", "%H:%M").time(),
+                    horario=usuario.horario,
+                    estado='Ausente',
+                    motivo='No asistió'
+                )
+                db.session.add(ausencia)
+    db.session.commit()
+    # --- FIN REGISTRO AUTOMÁTICO ---
+
+    asistencias = Ingreso.query.filter_by(user_id=usuario.idUser, estado='Presente')\
                                .filter(db.extract('month', Ingreso.fecha) == hoy.month).count()
 
-    ausencias = Ingreso.query.filter_by(user_id=usuario.idUser, estado='Ausencia')\
+    ausencias = Ingreso.query.filter_by(user_id=usuario.idUser, estado='Ausente')\
                              .filter(db.extract('month', Ingreso.fecha) == hoy.month).count()
 
     historial = Ingreso.query.filter_by(user_id=usuario.idUser)\
@@ -168,34 +201,59 @@ def home_super():
 def registrar_ingreso():
     data = request.get_json()
     documento = data.get('documento')
-    motivo = data.get('motivo')  # puede venir vacío o no
+    motivo = data.get('motivo')
 
     if not documento:
         return jsonify({'success': False, 'message': 'Documento requerido'}), 400
 
+    # 1. Buscar si es Usuario
     usuario = User.query.filter_by(documentUser=documento).first()
-    if not usuario:
-        return jsonify({'success': False, 'message': 'Usuario no encontrado'}), 404
+    if usuario:
+        horario_actual = determinar_horario_actual()
+        horario_trabajador = usuario.horario
 
-    # Horario actual y horario esperado
-    horario_actual = determinar_horario_actual()
-    horario_trabajador = usuario.horario  # ⚠️ Asegúrate de que User tenga este campo
+        ingreso = Ingreso.query.filter_by(user_id=usuario.idUser, fecha=date.today()).order_by(Ingreso.idIngreso.desc()).first()
 
-    # Si ya tiene ingreso registrado hoy
-    ingreso = Ingreso.query.filter_by(user_id=usuario.idUser, fecha=date.today()).order_by(Ingreso.idIngreso.desc()).first()
+        if ingreso:
+            salida = Salida.query.filter_by(user_id=usuario.idUser, ingreso_id=ingreso.idIngreso).first()
+            if salida:
+                if not motivo:
+                    return jsonify({'success': False, 'message': 'Debe ingresar un motivo para volver a entrar.'}), 400
 
-    if ingreso:
-        salida = Salida.query.filter_by(ingreso_id=ingreso.idIngreso).first()
-        if salida:
-            # Permitir nuevo ingreso solo con motivo
-            if not motivo:
-                return jsonify({
-                    'success': False,
-                    'message': 'Debe ingresar un motivo para volver a entrar.'
-                }), 400
+                nuevo_ingreso = Ingreso(
+                    user_id=usuario.idUser,
+                    admin_id=None,
+                    rol="User",
+                    fecha=date.today(),
+                    hora=datetime.now().time(),
+                    horario=horario_actual,
+                    estado='Presente',
+                    motivo=motivo
+                )
+                db.session.add(nuevo_ingreso)
+                db.session.commit()
+                return jsonify({'success': True, 'message': f'Nuevo ingreso registrado con motivo: {motivo}'})
+            else:
+                nueva_salida = Salida(
+                    user_id=usuario.idUser,
+                    admin_id=None,
+                    rol="User",
+                    ingreso_id=ingreso.idIngreso,
+                    fecha=date.today(),
+                    hora_salida=datetime.now().time(),
+                    horario=ingreso.horario
+                )
+                db.session.add(nueva_salida)
+                db.session.commit()
+                return jsonify({'success': True, 'message': 'Salida registrada'})
+        else:
+            if horario_actual != horario_trabajador and not motivo:
+                return jsonify({'success': False, 'message': f'El horario actual es {horario_actual}, pero su horario asignado es {horario_trabajador}. Ingrese un motivo para continuar.'}), 400
 
             nuevo_ingreso = Ingreso(
                 user_id=usuario.idUser,
+                admin_id=None,
+                rol="User",
                 fecha=date.today(),
                 hora=datetime.now().time(),
                 horario=horario_actual,
@@ -204,50 +262,75 @@ def registrar_ingreso():
             )
             db.session.add(nuevo_ingreso)
             db.session.commit()
+            return jsonify({'success': True, 'message': 'Ingreso registrado'})
 
-            return jsonify({'success': True, 'message': f'Nuevo ingreso registrado con motivo: {motivo}'})
+    # 2. Buscar si es Admin
+    admin = Admin.query.filter_by(documentAdmin=documento).first()
+    if admin:
+        horario_actual = determinar_horario_actual()
+        horario_admin = admin.horario
 
+        ingreso = Ingreso.query.filter_by(admin_id=admin.idAdmin, fecha=date.today()).order_by(Ingreso.idIngreso.desc()).first()
+
+        if ingreso:
+            salida = Salida.query.filter_by(admin_id=admin.idAdmin, ingreso_id=ingreso.idIngreso).first()
+            if salida:
+                if not motivo:
+                    return jsonify({'success': False, 'message': 'Debe ingresar un motivo para volver a entrar (Admin).'}), 400
+
+                nuevo_ingreso = Ingreso(
+                    user_id=None,
+                    admin_id=admin.idAdmin,
+                    rol="Admin",
+                    fecha=date.today(),
+                    hora=datetime.now().time(),
+                    horario=horario_actual,
+                    estado='Presente',
+                    motivo=motivo
+                )
+                db.session.add(nuevo_ingreso)
+                db.session.commit()
+                return jsonify({'success': True, 'message': f'Nuevo ingreso (Admin) registrado con motivo: {motivo}'})
+            else:
+                nueva_salida = Salida(
+                    user_id=None,
+                    admin_id=admin.idAdmin,
+                    rol="Admin",
+                    ingreso_id=ingreso.idIngreso,
+                    fecha=date.today(),
+                    hora_salida=datetime.now().time(),
+                    horario=ingreso.horario
+                )
+                db.session.add(nueva_salida)
+                db.session.commit()
+                return jsonify({'success': True, 'message': 'Salida (Admin) registrada'})
         else:
-            # Registrar salida
-            nueva_salida = Salida(
-                user_id=usuario.idUser,
-                ingreso_id=ingreso.idIngreso,
+            if horario_actual != horario_admin and not motivo:
+                return jsonify({'success': False, 'message': f'El horario actual es {horario_actual}, pero su horario asignado es {horario_admin}. Ingrese un motivo para continuar.'}), 400
+
+            nuevo_ingreso = Ingreso(
+                user_id=None,
+                admin_id=admin.idAdmin,
+                rol="Admin",
                 fecha=date.today(),
-                hora_salida=datetime.now().time(),
-                horario=ingreso.horario
+                hora=datetime.now().time(),
+                horario=horario_actual,
+                estado='Presente',
+                motivo=motivo
             )
-            db.session.add(nueva_salida)
+            db.session.add(nuevo_ingreso)
             db.session.commit()
-            return jsonify({'success': True, 'message': 'Salida registrada'})
+            return jsonify({'success': True, 'message': 'Ingreso (Admin) registrado'})
 
-    else:
-        # Primer ingreso del día
-        if horario_actual != horario_trabajador and not motivo:
-            return jsonify({
-                'success': False,
-                'message': f'El horario actual es {horario_actual}, pero su horario asignado es {horario_trabajador}. Ingrese un motivo para continuar.'
-            }), 400
-
-        nuevo_ingreso = Ingreso(
-            user_id=usuario.idUser,
-            fecha=date.today(),
-            hora=datetime.now().time(),
-            horario=horario_actual,
-            estado='Presente',
-            motivo=motivo
-        )
-        db.session.add(nuevo_ingreso)
-        db.session.commit()
-
-        return jsonify({'success': True, 'message': 'Ingreso registrado'})
-
+    # 3. Si no se encontró nada
+    return jsonify({'success': False, 'message': 'Documento no encontrado'}), 404
 @user_bp.route('/api/empleados')
 def obtener_empleados():
     usuarios = User.query.all()
     empleados = [
         {
             'id': u.idUser,
-            'name': u.usernameUser   # 👈 asegúrate de que tu modelo User tenga este campo
+            'name': u.usernameUser
         }
         for u in usuarios
     ]
@@ -264,34 +347,52 @@ def obtener_asistencia(user_id):
 
     for ingreso in ingresos:
         # Evento de ingreso
-        eventos.append({
-            'title': f'Ingreso: {ingreso.hora.strftime("%H:%M")}',
-            'start': f"{ingreso.fecha.strftime('%Y-%m-%d')}T{ingreso.hora.strftime('%H:%M:%S')}",
-            'className': 'ingreso',
-            'tipo': 'ingreso',
-            'extendedProps': {
-                'fecha': ingreso.fecha.strftime("%Y-%m-%d"),
-                'hora': ingreso.hora.strftime("%H:%M"),
-                'estado': ingreso.estado,
-                'motivo': ingreso.motivo,
-                'horario': ingreso.horario
-            }
-        })
-
-        # Evento de salida (si existe)
-        if ingreso.salida:
-            salida = ingreso.salida
+        if ingreso.estado == 'Presente' or ingreso.estado == 'Retardo':
             eventos.append({
-                'title': f'Salida: {salida.hora_salida.strftime("%H:%M")}',
-                'start': f"{salida.fecha.strftime('%Y-%m-%d')}T{salida.hora_salida.strftime('%H:%M:%S')}",
-                'className': 'salida',
-                'tipo': 'salida',
+                'title': f'Ingreso: {ingreso.hora.strftime("%H:%M")}',
+                'start': f"{ingreso.fecha.strftime('%Y-%m-%d')}T{ingreso.hora.strftime('%H:%M:%S')}",
+                'className': 'ingreso',
+                'tipo': 'ingreso',
                 'extendedProps': {
-                    'fecha': salida.fecha.strftime("%Y-%m-%d"),
-                    'hora': salida.hora_salida.strftime("%H:%M"),
-                    'horario': salida.horario
+                    'fecha': ingreso.fecha.strftime("%Y-%m-%d"),
+                    'hora': ingreso.hora.strftime("%H:%M"),
+                    'estado': ingreso.estado,
+                    'motivo': ingreso.motivo,
+                    'horario': ingreso.horario
                 }
             })
 
-    return jsonify({'success': True, 'eventos': eventos})
+        # Evento de ausencia
+        if ingreso.estado == 'Ausente':
+            eventos.append({
+                
+                'title': 'Ausente',
+                'start': ingreso.fecha.strftime('%Y-%m-%d'),
+                'className': 'ausente',
+                'tipo': 'ausencia',
+                'extendedProps': {
+                    'fecha': ingreso.fecha.strftime("%Y-%m-%d"),
+                    'estado': ingreso.estado,
+                    'motivo': ingreso.motivo,
+                    'horario': ingreso.horario
+                }
+            })
 
+        # Evento de salida (si existe)
+        if ingreso.salidas:
+            for salida in ingreso.salidas:
+                # Procesa cada salida relacionada
+                # Ejemplo:
+                eventos.append({
+                    'title': f'Salida: {salida.hora_salida.strftime("%H:%M")}',
+                    'start': f"{salida.fecha.strftime('%Y-%m-%d')}T{salida.hora_salida.strftime('%H:%M:%S')}",
+                    'className': 'salida',
+                    'tipo': 'salida',
+                    'extendedProps': {
+                        'fecha': salida.fecha.strftime("%Y-%m-%d"),
+                        'hora': salida.hora_salida.strftime("%H:%M"),
+                        'horario': salida.horario
+                    }
+                })
+
+    return jsonify({'success': True, 'eventos': eventos})

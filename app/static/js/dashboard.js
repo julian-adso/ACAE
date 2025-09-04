@@ -84,6 +84,17 @@ document.addEventListener('DOMContentLoaded', async function () {
             // 2️⃣ Evaluaciones solo con ingresos
             const evaluaciones = Object.entries(eventosPorDia).map(([fecha, eventos]) => {
                 const ingresos = eventos.filter(e => e.tipo === "ingreso" && e.extendedProps.hora);
+                const ausente = eventos.some(e => e.tipo === "ausencia" || e.extendedProps.estado === "Ausente");
+
+                if (ausente) {
+                    return {
+                        title: "❌ Ausente",
+                        start: fecha,
+                        allDay: true,
+                        className: "absent",
+                        extendedProps: { fecha, estado: "Ausente" }
+                    };
+                }
 
                 if (ingresos.length === 0) {
                     return {

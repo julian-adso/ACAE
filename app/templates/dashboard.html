@@ -27,6 +27,7 @@
             </div>
             <div id="details-panel">
                 <h2>Detalles del Día</h2>
+                <button id="export-details-btn" class="btn btn-success mb-2">Exportar datos</button>
                 <div id="details-content">
                     <p>Seleccione un día en el calendario para ver los detalles.</p>
                 </div>
@@ -36,6 +37,7 @@
     </div>
 
     <!-- Tu JS local -->
+     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 </body>
 </html>

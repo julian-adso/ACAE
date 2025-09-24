@@ -1,5 +1,4 @@
-
-from app import db
+from app.utilidad.extensions import db
 
 class Ingreso(db.Model):
     __tablename__ = "ingreso"
@@ -19,3 +18,4 @@ class Ingreso(db.Model):
 
     user = db.relationship('User', backref='ingresos', lazy=True) 
     admin = db.relationship('Admin', backref='ingresos', lazy=True)
+    salidas = db.relationship('Salida', back_populates='ingreso', lazy=True)

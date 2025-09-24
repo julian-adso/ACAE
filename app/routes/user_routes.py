@@ -6,12 +6,72 @@ from .. import db
 from app.models.user import User
 from app.models.admin import Admin
 from app.models.login import Login
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 import hashlib
 from collections import defaultdict
-from app.models.super import Super 
+from app.models.super import Super
+from calendar import monthrange
+from flask import send_file
+from app.utilidad.utils_excel import exportar_asistencia_excel
 
 user_bp = Blueprint('user', __name__)
+
+def registrar_ausencias_global():
+
+    hoy = datetime.now()
+    
+    # --- Rango del mes actual ---
+    primer_dia = hoy.replace(day=1)
+    ultimo_dia = hoy.replace(day=monthrange(hoy.year, hoy.month)[1])
+    dias_mes = [primer_dia.replace(day=d) for d in range(1, ultimo_dia.day + 1)]
+    
+    # --- Usuarios ---
+    usuarios = User.query.all()
+    for usuario in usuarios:
+        fechas_con_ingreso = set(
+            i.fecha for i in Ingreso.query.filter_by(user_id=usuario.idUser)
+            .filter(db.extract('month', Ingreso.fecha) == hoy.month)
+            .all()
+        )
+        for dia in dias_mes:
+            if dia.date() < hoy.date() and dia.date() not in fechas_con_ingreso:
+                if not Ingreso.query.filter_by(user_id=usuario.idUser, fecha=dia.date()).first():
+                    ausencia = Ingreso(
+                        user_id=usuario.idUser,
+                        admin_id=None,
+                        rol='User',
+                        fecha=dia.date(),
+                        hora=datetime.strptime("00:00", "%H:%M").time(),
+                        horario=usuario.horario,
+                        estado='Ausente',
+                        motivo='No asistió'
+                    )
+                    db.session.add(ausencia)
+
+    # --- Admins ---
+    admins = Admin.query.all()
+    for admin in admins:
+        fechas_con_ingreso = set(
+            i.fecha for i in Ingreso.query.filter_by(admin_id=admin.idAdmin)
+            .filter(db.extract('month', Ingreso.fecha) == hoy.month)
+            .all()
+        )
+        for dia in dias_mes:
+            if dia.date() < hoy.date() and dia.date() not in fechas_con_ingreso:
+                if not Ingreso.query.filter_by(admin_id=admin.idAdmin, fecha=dia.date()).first():
+                    ausencia = Ingreso(
+                        user_id=None,
+                        admin_id=admin.idAdmin,
+                        rol='Admin',
+                        fecha=dia.date(),
+                        hora=datetime.strptime("00:00", "%H:%M").time(),
+                        horario=admin.horario,
+                        estado='Ausente',
+                        motivo='No asistió'
+                    )
+                    db.session.add(ausencia)
+
+    db.session.commit()
 
 # Página inicial (ahora inicio.html)
 @user_bp.route('/')
@@ -324,30 +384,67 @@ def registrar_ingreso():
 
     # 3. Si no se encontró nada
     return jsonify({'success': False, 'message': 'Documento no encontrado'}), 404
+
 @user_bp.route('/api/empleados')
 def obtener_empleados():
     usuarios = User.query.all()
+    admins = Admin.query.all()
     empleados = [
         {
             'id': u.idUser,
-            'name': u.usernameUser
+            'name': u.usernameUser,
+            'tipo': 'user'
         }
         for u in usuarios
+    ] + [
+        {
+            'id': a.idAdmin,
+            'name': a.usernameAdmin,
+            'tipo': 'admin'
+        }
+        for a in admins
     ]
     return jsonify(empleados)
 
-@user_bp.route('/api/empleado/<int:user_id>/asistencia')
-def obtener_asistencia(user_id):
-    usuario = User.query.get(user_id)
-    if not usuario:
-        return jsonify({'success': False, 'message': 'Usuario no encontrado'}), 404
+from flask import send_file, jsonify
 
-    ingresos = Ingreso.query.filter_by(user_id=user_id).all()
+
+@user_bp.route('/api/empleado/<string:tipo>/<int:empleado_id>/asistencia')
+def obtener_asistencia(tipo, empleado_id):
+    mes = request.args.get("mes")  # opcional, formato YYYY-MM
+    query = Ingreso.query
+
+    if tipo == 'user':
+        usuario = User.query.get(empleado_id)
+        if not usuario:
+            return jsonify({'success': False, 'message': 'Empleado no encontrado'}), 404
+        query = query.filter_by(user_id=empleado_id)
+        nombre = usuario.usernameUser
+
+    elif tipo == 'admin':
+        admin = Admin.query.get(empleado_id)
+        if not admin:
+            return jsonify({'success': False, 'message': 'Empleado no encontrado'}), 404
+        query = query.filter_by(admin_id=empleado_id)
+        nombre = admin.usernameAdmin
+    else:
+        return jsonify({'success': False, 'message': 'Tipo inválido'}), 400
+
+    # 🔹 Filtrar por mes si viene el parámetro
+    if mes:
+        try:
+            year, month = map(int, mes.split("-"))
+            query = query.filter(db.extract("year", Ingreso.fecha) == year,
+                                 db.extract("month", Ingreso.fecha) == month)
+        except Exception:
+            return jsonify({'success': False, 'message': 'Formato de mes inválido'}), 400
+
+    ingresos = query.all()
     eventos = []
 
     for ingreso in ingresos:
-        # Evento de ingreso
-        if ingreso.estado == 'Presente' or ingreso.estado == 'Retardo':
+        # Ingreso presente o retardo
+        if ingreso.estado in ['Presente', 'Retardo']:
             eventos.append({
                 'title': f'Ingreso: {ingreso.hora.strftime("%H:%M")}',
                 'start': f"{ingreso.fecha.strftime('%Y-%m-%d')}T{ingreso.hora.strftime('%H:%M:%S')}",
@@ -362,10 +459,9 @@ def obtener_asistencia(user_id):
                 }
             })
 
-        # Evento de ausencia
+        # Ausente
         if ingreso.estado == 'Ausente':
             eventos.append({
-                
                 'title': 'Ausente',
                 'start': ingreso.fecha.strftime('%Y-%m-%d'),
                 'className': 'ausente',
@@ -378,11 +474,9 @@ def obtener_asistencia(user_id):
                 }
             })
 
-        # Evento de salida (si existe)
+        # Salidas
         if ingreso.salidas:
             for salida in ingreso.salidas:
-                # Procesa cada salida relacionada
-                # Ejemplo:
                 eventos.append({
                     'title': f'Salida: {salida.hora_salida.strftime("%H:%M")}',
                     'start': f"{salida.fecha.strftime('%Y-%m-%d')}T{salida.hora_salida.strftime('%H:%M:%S')}",
@@ -395,4 +489,4 @@ def obtener_asistencia(user_id):
                     }
                 })
 
-    return jsonify({'success': True, 'eventos': eventos})
+    return jsonify({'success': True, 'eventos': eventos, 'nombre': nombre, 'tipo': tipo})

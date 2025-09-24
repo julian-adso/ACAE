@@ -17,6 +17,5 @@ class Salida(db.Model):
     fecha = db.Column(db.Date, nullable=False)
     hora_salida = db.Column(db.Time, nullable=False)
     horario = db.Column(db.Enum('Mañana', 'Tarde', 'Noche'), nullable=False)
-
-    ingreso_id = db.Column(db.Integer, db.ForeignKey('ingreso.idIngreso'), nullable=True)
-    ingreso = db.relationship('Ingreso', backref='salidas')
+    
+    ingreso = db.relationship('Ingreso', back_populates='salidas')

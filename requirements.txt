@@ -6,4 +6,6 @@ pip install Flask-SQLAlchemy  ==2.5.1
 pip install SQLAlchemy  ==1.4.31
 #mysqlclient==2.0.3
 pip install PyMySQL  ==1.0.2
+# Dependencies for Excel file handling
+pip install openpyxl
 Werkzeug==2.2.2

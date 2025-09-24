@@ -1,6 +1,5 @@
-
 import hashlib
-from app import db
+from app.utilidad.extensions import db
 
 class Admin(db.Model):
     __tablename__= "admin"

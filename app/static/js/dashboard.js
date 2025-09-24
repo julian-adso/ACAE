@@ -36,11 +36,13 @@ document.addEventListener('DOMContentLoaded', async function () {
             employeeSelect.innerHTML = '';
 
             empleados.forEach(emp => {
-                const option = document.createElement('option');
-                option.value = emp.id;
-                option.textContent = emp.name;
-                employeeSelect.appendChild(option);
-            });
+            const option = document.createElement('option');
+            option.value = emp.id;
+            option.textContent = emp.name;
+            option.setAttribute('data-tipo', emp.tipo);  // ✅ agrega esto
+            employeeSelect.appendChild(option);
+        });
+
 
             // seleccionar primer empleado por defecto
             if (empleados.length > 0) {
@@ -57,7 +59,10 @@ document.addEventListener('DOMContentLoaded', async function () {
     // =============================
     async function actualizarCalendario(userId) {
     try {
-        const res = await fetch(`/api/empleado/${userId}/asistencia`);
+        const selectedOption = employeeSelect.options[employeeSelect.selectedIndex];
+        const tipo = selectedOption.getAttribute('data-tipo');
+        const res = await fetch(`/api/empleado/${tipo}/${userId}/asistencia`);
+
         const data = await res.json();
 
         if (data.success) {
@@ -169,8 +174,9 @@ document.addEventListener('DOMContentLoaded', async function () {
     // =============================
     function updateDetailsPanel(props) {
         let content = `<div><strong>Fecha:</strong> ${props.fecha}</div>`;
-        if (props.hora) content += `<div><strong>Ingreso:</strong> ${props.hora}</div>`;
-        if (props.hora_salida) content += `<div><strong>Salida:</strong> ${props.hora_salida}</div>`;
+        if (props.hora_salida || props.hora) {
+            content += `<div><strong>Salida:</strong> ${props.hora_salida || props.hora}</div>`;
+        }
         if (props.estado) content += `<div><strong>Estado:</strong> ${props.estado}</div>`;
         if (props.motivo) content += `<div><strong>Motivo:</strong> ${props.motivo}</div>`;
 
@@ -227,7 +233,8 @@ document.addEventListener('DOMContentLoaded', async function () {
     const mes = `${year}-${month}`;
 
     try {
-        const res = await fetch(`/api/empleado/${userId}/asistencia?mes=${mes}`);
+        const tipo = employeeSelect.options[employeeSelect.selectedIndex].getAttribute('data-tipo');
+        const res = await fetch(`/api/empleado/${tipo}/${userId}/asistencia?mes=${mes}`);
         const data = await res.json();
 
         if (data.success && Array.isArray(data.eventos)) {
@@ -247,7 +254,7 @@ document.addEventListener('DOMContentLoaded', async function () {
                 Fecha: ev.extendedProps.fecha || '',
                 Ingreso: ev.tipo === "ingreso" ? ev.extendedProps.hora || '' : '',
                 Salida: ev.tipo === "salida" ? ev.extendedProps.hora || ev.extendedProps.hora_salida || '' : '',
-                Estado: ev.extendedProps.estado || '',
+                Estado: ev.extendedProps.estado || (ev.tipo === 'salida' ? 'Salida' : ''),
                 Motivo: ev.extendedProps.motivo || ''
             }));
             const sheetData = [
@@ -260,7 +267,8 @@ document.addEventListener('DOMContentLoaded', async function () {
             const workbook = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(workbook, worksheet, "Asistencias");
 
-            XLSX.writeFile(workbook, `asistencias_${empleadoNombre}_${mes}.xlsx`);
+            const empleadoTipo = employeeSelect.options[employeeSelect.selectedIndex].getAttribute('data-tipo') || '';
+            XLSX.writeFile(workbook, `asistencias_${empleadoNombre}_${empleadoTipo}_${mes}.xlsx`);
         } else {
             alert("No se pudo obtener la información del mes.");
         }

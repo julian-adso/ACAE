@@ -1,6 +1,6 @@
 
 import hashlib
-from app import db
+from app.utilidad.extensions import db
 
 class User(db.Model):
     
